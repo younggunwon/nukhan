@@ -1250,6 +1250,14 @@ class Member extends \Bundle\Component\Member\Member
 			}
 		}
 
+        // 회원가입 후 노티플리 회원 등록
+        $notifly = \App::load('Component\\Notifly\\Notifly');
+        $motiflyMember = [];
+        $motiflyMember['memId'] = $member['memId'];
+        $motiflyMember['$email'] = $member['email'];
+        $motiflyMember['$phone_number'] = $member['cellPhone'];
+        $notifly->setUser($motiflyMember);
+
         return new \Component\Member\MemberVO($member);
     }
 

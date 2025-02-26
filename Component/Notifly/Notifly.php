@@ -222,7 +222,7 @@ class Notifly
 
 		// 6. cURL 옵션 설정
 		curl_setopt($ch, CURLOPT_RETURNTRANSFER, true); // 응답을 문자열로 반환
-		curl_setopt($ch, CURLOPT_POST, true);           // POST 요청 설정
+		curl_setopt($ch, CURLOPT_CUSTOMREQUEST, "DELETE"); // POST를 DELETE로 변경
 		curl_setopt($ch, CURLOPT_HTTPHEADER, [          // 헤더 설정
 			"Content-Type: application/json",
 			"Authorization: " . $authKey,
@@ -235,7 +235,6 @@ class Notifly
 
 		// 7. 요청 실행 및 응답 받기
 		$response = curl_exec($ch);
-		gd_debug(json_decode($response));
 
 		// 8. 에러 체크 및 결과 출력
 		if (curl_errno($ch)) {
