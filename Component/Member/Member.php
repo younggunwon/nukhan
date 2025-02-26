@@ -1208,7 +1208,7 @@ class Member extends \Bundle\Component\Member\Member
             $this->benefitJoin(new \Component\Member\MemberVO($member));
         } else {
             $logger->info(sprintf('can\'t benefit. your mall number is %d', $member['mallSno']));
-        }
+        } 
 		
         $session->set(Member::SESSION_NEW_MEMBER, $member['memNo']);
 
