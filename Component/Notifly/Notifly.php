@@ -255,5 +255,34 @@ class Notifly
 		// 9. cURL 세션 종료
 		curl_close($ch);
 	}
-}
 
+	public function setUserOrderFl($orderNo) {
+		// 주문정보로 회원정보 가져오기
+		$sql = "SELECT memId, o.memNo FROM es_order o LEFT JOIN es_member m ON o.memNo = m.memNo WHERE o.orderNo = '". $orderNo ."'";
+		$member = $this->db->query_fetch($sql)[0];
+		if($member['memId']) {
+			// 회원정보가 있을 경우 회원의 주문중 결제완료 이후의 주문이 존재하는지 검사
+			$sql = "SELECT 1 FROM es_order o LEFT JOIN wm_subSchedules s ON o.orderNo = s.orderNo WHERE o.memNo = '{$member['memNo']}' AND s.idx IS NULL AND o.orderStatus NOT IN('f1', 'f2', 'f3', 'c1', 'c2', 'c3', 'r1', 'r2', 'r3', 'e1', 'e2', 'e3', 'b1', 'b2', 'b3')";
+			$orderFl = $this->db->query_fetch($sql);
+			if(!$orderFl) {
+				$orderFl = 'n';
+			}
+			$sql = "SELECT 1 FROM es_order o LEFT JOIN wm_subSchedules s ON o.orderNo = s.orderNo WHERE o.memNo = '{$member['memNo']}' AND s.idx IS NOT NULL AND o.orderStatus NOT IN('f1', 'f2', 'f3', 'c1', 'c2', 'c3', 'r1', 'r2', 'r3', 'e1', 'e2', 'e3', 'b1', 'b2', 'b3')";
+			$subscriptionPayFl = $this->db->query_fetch($sql);
+			if(!$subscriptionPayFl) {
+				$subscriptionPayFl = 'n';
+			} else {
+				$subscriptionPayFl = 'y';
+			}
+			$sql = "SELECT 1 FROM es_order o LEFT JOIN wm_subSchedules s ON o.orderNo = s.orderNo WHERE o.memNo = '{$member['memNo']}' AND s.idx IS NOT NULL AND o.orderStatus IN('d2', 's1')";
+			$subscriptionFl = $this->db->query_fetch($sql);
+			if($subscriptionFl) {
+				$subscriptionFl = 'y';
+			} else {
+				$subscriptionFl = 'n';
+			}
+			
+			$this->setUser(['memId' => $member['memId'], 'orderFl' => $orderFl, 'subscriptionPayFl' => $subscriptionPayFl, 'subscriptionFl' => $subscriptionFl]);
+		}
+	}
+}

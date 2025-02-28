@@ -35,6 +35,64 @@ use Component\Page\Page;
 
 class OrderAdmin extends \Bundle\Component\Order\OrderAdmin
 {
+    /**
+     * 주문 상태 수정 전 처리 및 서로 변경할 수 없는 조건에서의 처리
+     * 상태변경이 안되는 경우 $this->statusStandardCode 멤버변수 확인 할 것
+     *
+     * !중요! 해당로직안에는 Exception 절대로 넣지 마시오!
+     *
+     * @param string $orderNo 주문 번호
+     * @param array $goodsData 주문 상품 정보
+     * @param string $statusMode 현재 주문 상태코드 (한자리)
+     * @param string $changeStatus 변경할 주문 상태 코드
+     * @param bool|string $reason 변경사유 ( 기본은 false 이며, 주문 리스트에서 처리시)
+     * @param boolean $bundleFl 특정 처리에서의 처리 모드
+     * @param string $mode 처리모드(입금대기리스트 구분 필요 시)
+     * @param string $useVisit 방문수령여부
+     *
+     * @return boolean
+     * @throws Exception
+     */
+    public function updateStatusUnconditionalPreprocess($orderNo, $goodsData, $statusMode, $changeStatus, $reason = false, $bundleFl = false, $mode = null, $useVisit = null, $autoProcess = false)
+    {
+        $returnData = parent::updateStatusUnconditionalPreprocess($orderNo, $goodsData, $statusMode, $changeStatus, $reason, $bundleFl, $mode, $useVisit, $autoProcess);
+
+        // 결제완료 notifly 이벤트 전송
+        if($changeStatus == 'p1') {
+            $sql = "SELECT memId FROM es_order o LEFT JOIN es_member m ON o.memNo = m.memNo WHERE o.orderNo = '". $orderNo ."'";
+            $memId = $this->db->query_fetch($sql)[0]['memId'];
+            if($memId) {
+                $notifly = \App::load('Component\\Notifly\\Notifly');
+                $memberInfo = [];
+                $memberInfo['memId'] = $memId;
+                $memberInfo['orderFl'] = 'y';
+                
+                $notifly->setUser($memberInfo);
+            }
+        }
+
+        // 결제완료 notifly 이벤트 전송
+        if($changeStatus == 'd2' || $changeStatus == 's1') {
+            // 구독주문인지 체크하기
+            $sql = "SELECT 1 FROM wm_subSchedules WHERE orderNo = '". $orderNo ."'";
+            $subSchedule = $this->db->query_fetch($sql);
+            if($subSchedule) {
+                $sql = "SELECT memId FROM es_order o LEFT JOIN es_member m ON o.memNo = m.memNo WHERE o.orderNo = '". $orderNo ."'";
+                $memId = $this->db->query_fetch($sql)[0]['memId'];
+                if($memId) {
+                    $notifly = \App::load('Component\\Notifly\\Notifly');
+                    $memberInfo = [];
+                    $memberInfo['memId'] = $memId;
+                    $memberInfo['subscriptionFl'] = 'y';
+                
+                    $notifly->setUser($memberInfo);
+                }
+            }
+        }
+
+		return $returnData;
+    }
+
 	protected function _setSearch($searchData, $searchPeriod = 7, $isUserHandle = false)
 	{
 		$result = parent::_setSearch($searchData, $searchPeriod, $isUserHandle);

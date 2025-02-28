@@ -115,4 +115,25 @@ class OrderNew extends \Bundle\Component\Order\OrderNew
 
 		return $normalizedPhoneNumber;
 	}
+
+	protected function setStatusChange($orderNo, $arrData, $autoProcess = false)
+    {
+        $returnData = parent::setStatusChange($orderNo, $arrData, $autoProcess);
+		
+		// 결제완료 notifly 이벤트 전송
+		if($arrData['changeStatus'] == 'p1') {
+			$member = \Session::get('member');
+			if($member['memId']) {
+				$notifly = \App::load('Component\\Notifly\\Notifly');
+				$memberInfo = [];
+				$memberInfo['memId'] = $member['memId'];
+				$memberInfo['orderFl'] = 'y';
+				$notifly->setUser($memberInfo);
+				
+				$eventParams = [];
+				$segmentationEventParamKeys = [];
+				$notifly->sendEvent('payComplete', $eventParams, $segmentationEventParamKeys);
+			}
+		}
+	}
 }

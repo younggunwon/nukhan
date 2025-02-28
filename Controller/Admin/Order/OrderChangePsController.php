@@ -2,8 +2,11 @@
 
 namespace Controller\Admin\Order;
 
- use Request;
- use App;
+use App;
+use Exception;
+use Request;
+use Framework\Debug\Exception\LayerNotReloadException;
+use Framework\Debug\Exception\LayerException;
  
 class OrderChangePsController extends \Bundle\Controller\Admin\Order\OrderChangePsController
 {
@@ -37,6 +40,9 @@ class OrderChangePsController extends \Bundle\Controller\Admin\Order\OrderChange
 								   $orderReorderCalculation->setRefundCompleteOrderGoodsNew(Request::post()->toArray());
 								}
 							 );
+							
+							 $notifly = \App::load('Component\\Notifly\\Notifly');
+							 $notifly->setUserOrderFl($post['orderNo']);
 
 							 echo"<script>alert('정기결제 주문건에 대한 환불처리가 완료되었습니다.');parent.opener.location.reload();parent.close();</script>";
 						 }
@@ -61,8 +67,128 @@ class OrderChangePsController extends \Bundle\Controller\Admin\Order\OrderChange
 						$subObj->cancel($post['orderNo'], false);
 					}
 				}
+				
+				$notifly = \App::load('Component\\Notifly\\Notifly');
+				$notifly->setUserOrderFl($post['orderNo']);
 			}
 
         /* 튜닝 END */
+	}
+
+	public function index() {
+		// --- 모듈 호출
+        $orderReorderCalculation = App::load(\Component\Order\ReOrderCalculation::class);
+        $dbUrl = \App::load('\\Component\\Marketing\\DBUrl');
+        $paycoConfig = $dbUrl->getConfig('payco', 'config');
+
+        $postValue = Request::post()->toArray();
+        switch ($postValue['mode']) {
+			case "refund_complete" : // 환불 완료
+				gd_debug($postValue);
+				exit;
+                try {
+                    if (Request::get()->get('channel') == 'naverpay') {
+                        $order = App::load(\Component\Order\OrderAdmin::class);
+                        $orderGoodsData = $order->getOrderGoods(null,Request::get()->get('sno'),null,null,null)[0];
+                        $checkoutData = $orderGoodsData['checkoutData'];
+                        $naverPayApi = new NaverPayAPI();
+                        $data = $naverPayApi->changeStatus($orderGoodsData['orderNo'],Request::get()->get('sno'),'r3');
+                        if($data['result'] == false) {
+                            throw new LayerNotReloadException($data['error']);
+                        }
+                        else {
+							$notifly = \App::load('Component\\Notifly\\Notifly');
+							$notifly->setUserOrderFl(Request::post()->get('orderNo'));
+                            throw new LayerException(__('환불처리가 완료되었습니다.\n 자세한 환불내역은 네이버페이 센터에서 확인하시기 바랍니다.'),null,null,null,10000);
+                        }
+                    } else {
+                        $smsAuto = \App::load('Component\\Sms\\SmsAuto');
+                        $smsAuto->setUseObserver(true);
+                        \DB::transaction(
+                            function () use ($orderReorderCalculation, $paycoConfig) {
+                                $orderReorderCalculation->setRefundCompleteOrderGoods(Request::post()->toArray());
+
+                                if ($paycoConfig['paycoFl'] == 'y') {
+                                    // 페이코쇼핑 결제데이터 전달
+                                    $payco = \App::load('\\Component\\Payment\\Payco\\Payco');
+                                    $payco->paycoShoppingRequest(Request::post()->get('orderNo'));
+                                }
+                            }
+                        );
+                        $smsAuto->notify();
+                    }
+					
+					$notifly = \App::load('Component\\Notifly\\Notifly');
+					$notifly->setUserOrderFl(Request::post()->get('orderNo'));
+
+                    throw new LayerException(__('환불 완료 일괄 처리가 완료 되었습니다.'), null, null, 'parent.close();parent.opener.location.reload()', 2000);
+                } catch (LayerException $e) {
+                    throw $e;
+                } catch (Exception $e) {
+                    if (Request::isAjax()) {
+                        $this->json([
+                            'code' => 0,
+                            'message' => $e->getMessage(),
+                        ]);
+                    } else {
+                        throw new LayerNotReloadException($e->getMessage());
+                    }
+                }
+                break;
+				case "refund_complete_new" : // 환불 완료
+					try {
+						if (Request::get()->get('channel') == 'naverpay') {
+							$order = App::load(\Component\Order\OrderAdmin::class);
+							$orderGoodsData = $order->getOrderGoods(null,Request::get()->get('sno'),null,null,null)[0];
+							$checkoutData = $orderGoodsData['checkoutData'];
+							$naverPayApi = new NaverPayAPI();
+							$data = $naverPayApi->changeStatus($orderGoodsData['orderNo'],Request::get()->get('sno'),'r3');
+							if($data['result'] == false) {
+								throw new LayerNotReloadException($data['error'], null, null, "parent.btnDisabledAction('F');");
+							}
+							else {
+								$notifly = \App::load('Component\\Notifly\\Notifly');
+								$notifly->setUserOrderFl(Request::post()->get('orderNo'));
+								throw new LayerException(__('환불처리가 완료되었습니다.\n 자세한 환불내역은 네이버페이 센터에서 확인하시기 바랍니다.'),null,null,null,10000);
+							}
+						} else {
+							$smsAuto = \App::load('Component\\Sms\\SmsAuto');
+							$smsAuto->setUseObserver(true);
+							\DB::transaction(
+								function () use ($orderReorderCalculation, $paycoConfig) {
+									$orderReorderCalculation->setRefundCompleteOrderGoodsNew(Request::post()->toArray());
+	
+									if ($paycoConfig['paycoFl'] == 'y') {
+										// 페이코쇼핑 결제데이터 전달
+										$payco = \App::load('\\Component\\Payment\\Payco\\Payco');
+										$payco->paycoShoppingRequest(Request::post()->get('orderNo'));
+									}
+								}
+							);
+							$smsAuto->notify();
+						}
+						
+						$notifly = \App::load('Component\\Notifly\\Notifly');
+						$notifly->setUserOrderFl(Request::post()->get('orderNo'));
+	
+						throw new LayerException(__('환불 완료 일괄 처리가 완료 되었습니다.'), null, null, 'parent.close();parent.opener.location.reload()', 2000);
+					} catch (LayerException $e) {
+						throw $e;
+					} catch (Exception $e) {
+						if (Request::isAjax()) {
+							$this->json([
+								'code' => 0,
+								'message' => $e->getMessage(),
+							]);
+						} else {
+							throw new LayerNotReloadException($e->getMessage(), null, null, "parent.btnDisabledAction('F');");
+						}
+					}
+					break;
+			default:
+				parent::index();
+				break;
+		}
+		exit;
 	}
 }

@@ -1255,6 +1255,18 @@ class Subscription
 			 $this->db->set_update_db(DB_ORDER, $param2, "orderNo = ?", $bind2);
 		} // endif 
 		
+		if($isSuccess) {
+			$sql = "SELECT m.memId FROM es_order o LEFT JOIN es_member m ON o.memNo = m.memNo WHERE o.orderNo = '". $orderView['orderNo'] ."'";
+			$member = $this->db->query_fetch($sql)[0];
+
+			if($member['memId']) {
+				$notifly = \App::load('Component\\Notifly\\Notifly');
+				$memberInfo = [];
+				$memberInfo['memId'] = $member['memId'];
+				$memberInfo['subscriptionPayFl'] = 'y';
+				$notifly->setUser($memberInfo);
+			}
+		}
 		return $isSuccess;
 		/* 결제 처리 E */
 	}
