@@ -1183,4 +1183,40 @@ class Cart extends \Bundle\Component\Cart\Cart
         return $goodsDcPrice;
     }
 
+    /**
+     * 장바구니 담기 (상품코드/옵션코드/상품수량/적용쿠폰 배열)
+     * 상품을 장바구니에 담습니다.
+     *
+     * @param array $arrData 상품 정보 [mode, scmNo, cartMode, goodsNo[], optionSno[], goodsCnt[], couponApplyNo[]]
+     *
+     * @return array
+     * @throws Exception
+     */
+    public function saveInfoCart($arrData, $tempCartPolicyDirectOrder = 'n', $channel = '')
+    {
+        parent::saveInfoCart($arrData, $tempCartPolicyDirectOrder, $channel);
+        
+        // 장바구니 상품 담았을 때 노티플리 이벤트 전송
+        $member = \Session::get('member');
+        if($member) {
+            $sql = "
+                SELECT goodsNo 
+                FROM es_cart 
+                WHERE memNo = {$member['memNo']}";
+            $cartGoodsNo = $this->db->query_fetch($sql);
+            $cartGoodsNo = array_column($cartGoodsNo, 'goodsNo');
+            $cartGoodsNo = implode(',', $cartGoodsNo);
+
+            $notifly = \App::load('Component\\Notifly\\Notifly');
+            
+            $memberInfo = [];
+            $memberInfo['memId'] = $member['memId'];
+            $memberInfo['$email'] = $member['email'];
+            $memberInfo['$phone_number'] = $member['cellPhone'];
+            $memberInfo['cartGoodsNo'] = $cartGoodsNo;
+            $notifly->setUser($memberInfo);
+        }
+        // 장바구니 상품 담았을 때 노티플리 이벤트 전송
+        
+    }
 }

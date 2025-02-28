@@ -75,7 +75,7 @@ class Notifly
 		}
 	}
 
-	public function sendEvent($eventName) {
+	public function sendEvent($eventName, $eventParams = [], $segmentationEventParamKeys = []) {
 		$token = $this->getToken();
 		// 2. 전송할 JSON 데이터 준비 (배열 형태)
 		$data = [

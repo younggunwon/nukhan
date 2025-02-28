@@ -51,5 +51,8 @@ class Controller extends \Bundle\Controller\Front\Controller
 
 		$wgEnterFromGoogleFl = \Cookie::get('wgEnterFromGoogleFl');
 		$this->setData('wgEnterFromGoogleFl', $wgEnterFromGoogleFl);
+
+		$memberInfo = \Session::get('member');
+		$this->setData('memberInfo', $memberInfo);
 	}
 }
