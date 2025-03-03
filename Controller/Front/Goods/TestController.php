@@ -18,7 +18,13 @@ class TestController extends \Controller\Front\Controller
 		// $userId = 'nukhan1';
 		// $notifly->deleteUser($userId);
 
-		$notifly->setUserGroup();
+		// $this->db = \App::load('DB');
+		// $sql = "SELECT * FROM wg_apiLog WHERE sno = 24239";
+		// $apiLog = $this->db->query_fetch($sql);
+		// gd_debug($apiLog);
+		// exit;
+
+		$notifly->setUserNextPayDate();
 		exit;
 	}
 }

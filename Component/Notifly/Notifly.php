@@ -13,6 +13,7 @@ class Notifly
 	const SECRET_KEY = 'OOvM)xA7i^rw';
 	
 	public $db;
+	public $sendMemberData;
 
 	public function __construct()
     {
@@ -190,6 +191,8 @@ class Notifly
 
 			// cURL 세션 종료
 			curl_close($ch);
+
+			sleep(2);
 		}
 	}
 	/**
@@ -362,17 +365,13 @@ class Notifly
 			OREDR BY idxApply ASC
 		";
 		$subscription = $this->db->query_fetch($sql);
-		$sendMemberData = [];
 
 		foreach($subscription as $sub) {
-			$sendMemberData[$sub['memId']]['subscriptionPay'.$sub['goodsNo']] = $sub['cnt'];
-			$sendMemberData[$sub['memId']]['subscriptionPayCnt'] += $sub['cnt'];
-			$sendMemberData[$sub['memId']]['subscriptionPayFl'] = 'y';
-			if(!$sendMemberData[$sub['memId']]['memId']) {
-				$sendMemberData[$sub['memId']]['memId'] = $sub['memId'];
-			}
+			$this->sendMemberData[$sub['memId']]['subscriptionPay'.$sub['goodsNo']] = $sub['cnt'];
+			$this->sendMemberData[$sub['memId']]['subscriptionPayCnt'] += $sub['cnt'];
+			$this->sendMemberData[$sub['memId']]['subscriptionPayFl'] = 'y';
+			$this->sendMemberData[$sub['memId']]['memId'] = $sub['memId'];
 		}
-		$this->setUsers($sendMemberData);
 
 		$memberInfo = [];
 		$sql = "
@@ -387,16 +386,12 @@ class Notifly
 		";
 		$subscription = $this->db->query_fetch($sql);
 
-		$sendMemberData = [];
 		foreach($subscription as $sub) {
-			$sendMemberData[$sub['memId']]['subscription'.$sub['goodsNo']] = $sub['cnt'];
-			$sendMemberData[$sub['memId']]['subscriptionCnt'] += $sub['cnt'];
-			$sendMemberData[$sub['memId']]['subscriptionFl'] = 'y';
-			if(!$sendMemberData[$sub['memId']]['memId']) {
-				$sendMemberData[$sub['memId']]['memId'] = $sub['memId'];
-			}
+			$this->sendMemberData[$sub['memId']]['subscription'.$sub['goodsNo']] = $sub['cnt'];
+			$this->sendMemberData[$sub['memId']]['subscriptionCnt'] += $sub['cnt'];
+			$this->sendMemberData[$sub['memId']]['subscriptionFl'] = 'y';
+			$this->sendMemberData[$sub['memId']]['memId'] = $sub['memId'];
 		}
-		$this->setUsers($sendMemberData);
 	}
 
 	public function setUserOrderCnt() {
@@ -415,22 +410,18 @@ class Notifly
 		";
 		$orderCnt = $this->db->query_fetch($sql);
 		foreach($orderCnt as $cnt) {
-			$sendMemberData[$cnt['memId']]['memId'] = $cnt['memId'];
-			$sendMemberData[$cnt['memId']]['orderCnt'] = $cnt['cnt'];
+			$this->sendMemberData[$cnt['memId']]['memId'] = $cnt['memId'];
+			$this->sendMemberData[$cnt['memId']]['orderCnt'] = $cnt['cnt'];
 		}
-		
-		$this->setUsers($sendMemberData);
 	}
 
 	public function setUserGroup() {
 		$sql = "SELECT memId, mg.groupNm FROM es_member m LEFT JOIN es_memberGroup mg ON m.groupSno = mg.sno";
 		$member = $this->db->query_fetch($sql);
-		$sendMemberData = [];
 		foreach($member as $mem) {
-			$sendMemberData[$mem['memId']]['groupNm'] = $mem['groupNm'];
-			$sendMemberData[$mem['memId']]['memId'] = $mem['memId'];
+			$this->sendMemberData[$mem['memId']]['groupNm'] = $mem['groupNm'];
+			$this->sendMemberData[$mem['memId']]['memId'] = $mem['memId'];
 		}
-		$this->setUsers($sendMemberData);
 	}
 
 	public function setUserAddGoods() {
@@ -440,14 +431,56 @@ class Notifly
 	}
 
 	public function setUserSex() {
-		
+		$sql = "
+			SELECT memId, sexFl, birthDt, regDt 
+			FROM es_member
+			WHERE sexFl != '' 
+			AND sexFl IS NOT NULL
+		";
+		$member = $this->db->query_fetch($sql);
+		foreach($member as $mem) {
+			$this->sendMemberData[$mem['memId']]['sexFl'] = $mem['sexFl'];
+			$this->sendMemberData[$mem['memId']]['memId'] = $mem['memId'];
+			$this->sendMemberData[$mem['memId']]['regDt'] = $mem['regDt'];
+			$this->sendMemberData[$mem['memId']]['birthYear'] = date('Y', $mem['birthDt']);
+		}
 	}
 
 	public function setUserOrderPrice() {
-
+		$sql = "
+			SELECT SUM(settlePrice) as settlePrice, memId 
+			FROM es_order o 
+			LEFT JOIN es_member m 
+			ON o.memNo = m.memNo 
+			WHERE orderStatus NOT IN('c1','c2','c3','f1','f2','f3','f4','b1','b2','b3','e1','e2','e3','r1','r2','r3') 
+			AND o.memNo IS NOT NULL
+			AND o.memNo != 0
+			AND settlePrice > 0
+			AND m.memNo IS NOT NULL
+			GROUP BY o.memNo
+		";
+		$order = $this->db->query_fetch($sql);
+		foreach($order as $ord) {
+			$this->sendMemberData[$ord['memId']]['orderPrice'] = round($ord['settlePrice']);
+			$this->sendMemberData[$ord['memId']]['memId'] = $ord['memId'];
+		}
 	}
 
 	public function setUserNextPayDate() {
-
+		$sql = "
+			SELECT memId, MIN(deliveryStamp) as deliveryStamp
+			FROM wm_subSchedules s
+			LEFT JOIN es_member m
+			ON s.memNo = m.memNo
+			WHERE (orderNo IS NULL OR orderNo = '')
+			AND m.memNo IS NOT NULL
+			AND s.status = 'ready'
+			GROUP BY s.memNo
+		";
+		$subSchedules = $this->db->query_fetch($sql);
+		foreach($subSchedules as $sub) {
+			$this->sendMemberData[$sub['memId']]['deliveryDate'] = date('Ymd', $sub['deliveryStamp']);
+			$this->sendMemberData[$sub['memId']]['memId'] = $sub['memId'];
+		}
 	}
 }
