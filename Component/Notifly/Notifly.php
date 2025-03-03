@@ -140,12 +140,17 @@ class Notifly
 		foreach($chunks as $chunk) {
 			$data = [];	
 			foreach($chunk as $userInfo) {
+				$memId = $userInfo['memId'];
+				unset($userInfo['memId']);
 				$data[] = [
 					"projectId" => self::PROJECT_ID,
 					"userProperties" => $userInfo,
-					"userId" => $userInfo['memId']
+					"userId" => $memId
 				];
 			}
+			// gd_debug($data);
+			// exit;
+
 			$jsonData = json_encode($data);
 
 			// 인증 키 설정
@@ -354,20 +359,17 @@ class Notifly
 			WHERE s.orderNo IS NOT NULL
 			AND og.orderStatus NOT IN('c1','c2','c3','f1','f2','f3','f4','b1','b2','b3','e1','e2','e3','r1','r2','r3')
 			GROUP BY s.memNo, idxApply
+			OREDR BY idxApply ASC
 		";
 		$subscription = $this->db->query_fetch($sql);
-		foreach($subscription as $sub) {
-			$memberInfo[$sub['memId']][$sub['goodsNo']] = $sub['cnt'];
-		}
-
 		$sendMemberData = [];
-		$key = 0;
-		foreach($memberInfo as $memId => $memberGoodsData) {
-			$key++;
-			$sendMemberData[$key]['memId'] = $memId;
-			foreach($memberGoodsData as $goodsNo => $cnt) {
-				$sendMemberData[$key]['subscriptionPay'.$goodsNo] = $cnt;
-				$sendMemberData[$key]['subscriptionPayFl'] = 'y';
+
+		foreach($subscription as $sub) {
+			$sendMemberData[$sub['memId']]['subscriptionPay'.$sub['goodsNo']] = $sub['cnt'];
+			$sendMemberData[$sub['memId']]['subscriptionPayCnt'] += $sub['cnt'];
+			$sendMemberData[$sub['memId']]['subscriptionPayFl'] = 'y';
+			if(!$sendMemberData[$sub['memId']]['memId']) {
+				$sendMemberData[$sub['memId']]['memId'] = $sub['memId'];
 			}
 		}
 		$this->setUsers($sendMemberData);
@@ -384,20 +386,68 @@ class Notifly
 			GROUP BY s.memNo, idxApply
 		";
 		$subscription = $this->db->query_fetch($sql);
-		foreach($subscription as $sub) {
-			$memberInfo[$sub['memId']][$sub['goodsNo']] = $sub['cnt'];
-		}
 
 		$sendMemberData = [];
-		$key = 0;
-		foreach($memberInfo as $memId => $memberGoodsData) {
-			$key++;
-			$sendMemberData[$key]['memId'] = $memId;
-			foreach($memberGoodsData as $goodsNo => $cnt) {
-				$sendMemberData[$key]['subscription'.$goodsNo] = $cnt;
-				$sendMemberData[$key]['subscriptionFl'] = 'n';
+		foreach($subscription as $sub) {
+			$sendMemberData[$sub['memId']]['subscription'.$sub['goodsNo']] = $sub['cnt'];
+			$sendMemberData[$sub['memId']]['subscriptionCnt'] += $sub['cnt'];
+			$sendMemberData[$sub['memId']]['subscriptionFl'] = 'y';
+			if(!$sendMemberData[$sub['memId']]['memId']) {
+				$sendMemberData[$sub['memId']]['memId'] = $sub['memId'];
 			}
 		}
 		$this->setUsers($sendMemberData);
+	}
+
+	public function setUserOrderCnt() {
+		$sql = "SELECT orderNo FROM wm_subSchedules WHERE orderNo IS NOT NULL AND orderNo != ''";
+		$subSchedulesOrderNo = $this->db->query_fetch($sql);
+		$subSchedulesOrderNo = array_column($subSchedulesOrderNo, 'orderNo');
+
+		$sql = "
+			SELECT m.memId, COUNT(*) as cnt FROM es_order o
+			LEFT JOIN es_member m
+			ON o.memNo = m.memNo
+			WHERE orderStatus NOT IN('c1','c2','c3','f1','f2','f3','f4','b1','b2','b3','e1','e2','e3','r1','r2','r3')
+			AND o.orderNo NOT IN('".implode('\',\'', $subSchedulesOrderNo)."')
+			AND m.memNo IS NOT NULL
+			GROUP BY o.memNo
+		";
+		$orderCnt = $this->db->query_fetch($sql);
+		foreach($orderCnt as $cnt) {
+			$sendMemberData[$cnt['memId']]['memId'] = $cnt['memId'];
+			$sendMemberData[$cnt['memId']]['orderCnt'] = $cnt['cnt'];
+		}
+		
+		$this->setUsers($sendMemberData);
+	}
+
+	public function setUserGroup() {
+		$sql = "SELECT memId, mg.groupNm FROM es_member m LEFT JOIN es_memberGroup mg ON m.groupSno = mg.sno";
+		$member = $this->db->query_fetch($sql);
+		$sendMemberData = [];
+		foreach($member as $mem) {
+			$sendMemberData[$mem['memId']]['groupNm'] = $mem['groupNm'];
+			$sendMemberData[$mem['memId']]['memId'] = $mem['memId'];
+		}
+		$this->setUsers($sendMemberData);
+	}
+
+	public function setUserAddGoods() {
+		// 구독결제시 추가옵션 상품코드 업데이트
+
+		// 구독결제시 추가옵션 상품을 몇개 구매했는지
+	}
+
+	public function setUserSex() {
+		
+	}
+
+	public function setUserOrderPrice() {
+
+	}
+
+	public function setUserNextPayDate() {
+
 	}
 }

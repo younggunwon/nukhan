@@ -18,7 +18,7 @@ class TestController extends \Controller\Front\Controller
 		// $userId = 'nukhan1';
 		// $notifly->deleteUser($userId);
 
-		$notifly->setUserSubscription();
+		$notifly->setUserGroup();
 		exit;
 	}
 }
