@@ -130,7 +130,63 @@ class Notifly
 		// 9. cURL 세션 종료
 		curl_close($ch);
 	}
-	
+
+	public function setUsers($userInfoArray) {
+		$token = $this->getToken();
+		
+		// 1000개씩 데이터 분할
+		$chunks = array_chunk($userInfoArray, 1000);
+		
+		foreach($chunks as $chunk) {
+			$data = [];	
+			foreach($chunk as $userInfo) {
+				$data[] = [
+					"projectId" => self::PROJECT_ID,
+					"userProperties" => $userInfo,
+					"userId" => $userInfo['memId']
+				];
+			}
+			$jsonData = json_encode($data);
+
+			// 인증 키 설정
+			$authKey = "{$token}";
+
+			// cURL 초기화
+			$ch = curl_init(self::USER_URL);
+
+			// cURL 옵션 설정
+			curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+			curl_setopt($ch, CURLOPT_POST, true);
+			curl_setopt($ch, CURLOPT_HTTPHEADER, [
+				"Content-Type: application/json",
+				"Authorization: " . $authKey,
+				"Content-Length: " . strlen($jsonData)
+			]);
+			curl_setopt($ch, CURLOPT_POSTFIELDS, $jsonData);
+			curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+
+			// 요청 실행 및 응답 받기
+			$response = curl_exec($ch);
+
+			// 에러 체크 및 결과 출력
+			if (curl_errno($ch)) {
+				$sql = "
+					INSERT INTO wg_apiLog(apiType, requestData, responseData)
+					VALUES('setNotiflyUser', '".addslashes($jsonData)."', '".curl_error($ch)."');
+				";
+				$this->db->query($sql);
+			} else {
+				$sql = "
+					INSERT INTO wg_apiLog(apiType, requestData, responseData)
+					VALUES('setNotiflyUser', '".addslashes($jsonData)."', '".$response."');
+				";
+				$this->db->query($sql);
+			}
+
+			// cURL 세션 종료
+			curl_close($ch);
+		}
+	}
 	/**
 		$userInfo = [
 			'memId'	 => 'testUser',
@@ -154,7 +210,7 @@ class Notifly
 			if($key == 'memId') continue;
 			$data['userProperties'][$key] = $val;
 		}
-		$jsonData = json_encode($data);
+		$jsonData = json_encode([$data]);
 
 		// 4. 인증 키 설정
 		$authKey = "{$token}"; // 실제 auth-key로 교체
@@ -284,5 +340,64 @@ class Notifly
 			
 			$this->setUser(['memId' => $member['memId'], 'orderFl' => $orderFl, 'subscriptionPayFl' => $subscriptionPayFl, 'subscriptionFl' => $subscriptionFl]);
 		}
+	}
+
+	// 구독 제품별 n회차 고객 노티플라이에 회원 속성 업데이트
+	public function setUserSubscription() {
+		$memberInfo = [];
+		$sql = "
+			SELECT m.memId, goodsNo, idxApply, COUNT(*) as cnt FROM wm_subSchedules s
+			LEFT JOIN es_orderGoods og
+			ON s.orderNo = og.orderNo AND og.goodsType != 'addGoods'
+            LEFT JOIN es_member m
+			ON s.memNo = m.memNo
+			WHERE s.orderNo IS NOT NULL
+			AND og.orderStatus NOT IN('c1','c2','c3','f1','f2','f3','f4','b1','b2','b3','e1','e2','e3','r1','r2','r3')
+			GROUP BY s.memNo, idxApply
+		";
+		$subscription = $this->db->query_fetch($sql);
+		foreach($subscription as $sub) {
+			$memberInfo[$sub['memId']][$sub['goodsNo']] = $sub['cnt'];
+		}
+
+		$sendMemberData = [];
+		$key = 0;
+		foreach($memberInfo as $memId => $memberGoodsData) {
+			$key++;
+			$sendMemberData[$key]['memId'] = $memId;
+			foreach($memberGoodsData as $goodsNo => $cnt) {
+				$sendMemberData[$key]['subscriptionPay'.$goodsNo] = $cnt;
+				$sendMemberData[$key]['subscriptionPayFl'] = 'y';
+			}
+		}
+		$this->setUsers($sendMemberData);
+
+		$memberInfo = [];
+		$sql = "
+			SELECT m.memId, goodsNo, idxApply, COUNT(*) as cnt FROM wm_subSchedules s
+			LEFT JOIN es_orderGoods og
+			ON s.orderNo = og.orderNo AND og.goodsType != 'addGoods'
+            LEFT JOIN es_member m
+			ON s.memNo = m.memNo
+			WHERE s.orderNo IS NOT NULL
+			AND og.orderStatus IN('d2', 's1')
+			GROUP BY s.memNo, idxApply
+		";
+		$subscription = $this->db->query_fetch($sql);
+		foreach($subscription as $sub) {
+			$memberInfo[$sub['memId']][$sub['goodsNo']] = $sub['cnt'];
+		}
+
+		$sendMemberData = [];
+		$key = 0;
+		foreach($memberInfo as $memId => $memberGoodsData) {
+			$key++;
+			$sendMemberData[$key]['memId'] = $memId;
+			foreach($memberGoodsData as $goodsNo => $cnt) {
+				$sendMemberData[$key]['subscription'.$goodsNo] = $cnt;
+				$sendMemberData[$key]['subscriptionFl'] = 'n';
+			}
+		}
+		$this->setUsers($sendMemberData);
 	}
 }

@@ -84,8 +84,6 @@ class OrderChangePsController extends \Bundle\Controller\Admin\Order\OrderChange
         $postValue = Request::post()->toArray();
         switch ($postValue['mode']) {
 			case "refund_complete" : // 환불 완료
-				gd_debug($postValue);
-				exit;
                 try {
                     if (Request::get()->get('channel') == 'naverpay') {
                         $order = App::load(\Component\Order\OrderAdmin::class);

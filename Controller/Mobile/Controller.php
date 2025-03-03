@@ -54,8 +54,5 @@ class Controller extends \Bundle\Controller\Mobile\Controller
 
 		$memberInfo = \Session::get('member');
 		$this->setData('memberInfo', $memberInfo);
-
-		$notifly = \App::load('Component\\Notifly\\Notifly');
-		$notifly->setUserOrderFl('2502281126000009');	
 	}
 }
